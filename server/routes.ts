@@ -89,37 +89,22 @@ class Routes {
   }
 
   @Router.get("/posts")
-  @Router.validate(z.object({ author: z.string().optional() }))
-  async getPosts(author?: string) {
-    let posts;
-    if (author) {
-      const id = (await Profiling.getUserByUsername(author))._id;
-      posts = await Posting.getByAuthor(id);
+  async getPosts(id?: string) {
+    if (id) {
+      const oid = new ObjectId(id);
+      const post = await Posting.getPost(oid);
+      return Responses.post(post);
     } else {
-      posts = await Posting.getPosts();
+      const posts = await Posting.getPosts();
+      return Responses.posts(posts);
     }
-    return Responses.posts(posts);
-  }
-
-  @Router.get("/posts")
-  async getPost(_id: ObjectId) {
-    const post = await Posting.getPost(_id);
-    return Responses.post(post);
   }
 
   @Router.post("/posts")
   async createPost(session: SessionDoc, word: string, translation: string, imageUrl?: string, audioUrl?: string) {
     const user = Sessioning.getUser(session);
     const created = await Posting.create(user, word, translation, imageUrl, audioUrl);
-
-    if (created.post !== null) {
-      const entryExists = await Dictionarying.entryExists(word);
-      if (entryExists) {
-        await Dictionarying.addItem(word, created.post._id);
-      } else {
-        await Dictionarying.createEntry(word, created.post._id);
-      }
-    }
+    await Dictionarying.addItem(word, created.post!._id);
     return { msg: created.msg, post: await Responses.post(created.post) };
   }
 
