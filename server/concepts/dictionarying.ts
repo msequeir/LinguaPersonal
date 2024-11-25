@@ -5,7 +5,7 @@ import { NotAllowedError, NotFoundError } from "./errors";
 
 export interface DictionaryDoc extends BaseDoc {
   word: string;
-  posts: ObjectId[];
+  posts: Set<ObjectId>;
 }
 
 /**
@@ -18,19 +18,6 @@ export default class DictionaryingConcept {
     this.dictionary = new DocCollection<DictionaryDoc>(collectionName);
   }
 
-  async createEntry(word: string, post: ObjectId) {
-    await this.assertEntryAlreadyExists(word);
-    const _id = await this.dictionary.createOne({
-      word,
-      posts: [post],
-    });
-
-    return {
-      msg: "Entry successfully added!",
-      entry: await this.dictionary.readOne({ _id }),
-    };
-  }
-
   async deleteEntry(word: string) {
     await this.assertEntryExists(word);
     const entry = await this.dictionary.popOne({ word });
@@ -41,15 +28,32 @@ export default class DictionaryingConcept {
   }
 
   async addItem(word: string, item: ObjectId) {
-    await this.assertEntryExists(word);
     const entry = await this.dictionary.readOne({ word });
-    await this.dictionary.partialUpdateOne({ word }, { posts: entry?.posts.concat(item) });
+    if (entry) {
+      // Add item to existing entry
+      await this.dictionary.partialUpdateOne({ word }, { posts: entry.posts.add(item) });
+    } else {
+      // Create entry and add item to it
+      await this.dictionary.createOne({
+        word,
+        posts: new Set([item]),
+      });
+    }
   }
 
   async deleteItem(word: string, item: ObjectId) {
     const entry = await this.dictionary.readOne({ word });
-    const updatedPosts = entry?.posts.filter((p) => !p.equals(item));
-    await this.dictionary.partialUpdateOne({ word }, { posts: updatedPosts });
+    if (entry) {
+      const updatedPosts = entry.posts;
+      updatedPosts.delete(item);
+      if (updatedPosts.size > 0) {
+        // Entry still has posts remaining
+        await this.dictionary.partialUpdateOne({ word }, { posts: updatedPosts });
+      } else {
+        // Entry has no remaining posts
+        await this.dictionary.deleteOne({ word });
+      }
+    }
   }
 
   async getEntry(word: string) {
@@ -57,13 +61,6 @@ export default class DictionaryingConcept {
     return {
       entry,
     };
-  }
-
-  private async assertEntryAlreadyExists(word: string) {
-    const entry = await this.dictionary.readOne({ word });
-    if (entry) {
-      throw new EntryAlreadyExistsError(word);
-    }
   }
 
   public async entryExists(word: string) {
@@ -76,10 +73,6 @@ export default class DictionaryingConcept {
     if (!entry) {
       throw new EntryNotFoundError(word);
     }
-  }
-
-  async deletePostEntrys(postId: ObjectId) {
-    return await this.dictionary.deleteMany({ postId });
   }
 }
 
