@@ -61,7 +61,7 @@ export default class DictionaryingConcept {
 
   private async assertEntryAlreadyExists(word: string) {
     const entry = await this.dictionary.readOne({ word });
-    if (!entry) {
+    if (entry) {
       throw new EntryAlreadyExistsError(word);
     }
   }

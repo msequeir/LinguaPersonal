@@ -58,7 +58,24 @@ export default class PostingConcept {
       throw new NotFoundError(`Post ${_id} does not exist!`);
     }
 
-    await this.posts.partialUpdateOne({ _id }, { translation, imageUrl, audioUrl });
+    // Prepare the update object, but only include fields that are defined
+    const updateData: Partial<PostDoc> = {};
+
+    if (translation !== undefined) {
+      updateData.translation = translation;
+    }
+
+    if (imageUrl !== undefined) {
+      updateData.imageUrl = imageUrl;
+    }
+
+    if (audioUrl !== undefined) {
+      updateData.audioUrl = audioUrl;
+    }
+
+    // Perform the partial update, only including fields that have changed
+    await this.posts.partialUpdateOne({ _id }, updateData);
+
     return { msg: "Post successfully updated!" };
   }
 
